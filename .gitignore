@@ -1,0 +1,6 @@
+# Written by Herdr into every mod folder on start; never edit or commit.
+*.d.ts
+jsconfig.json
+# Herdr's report for an invalid file.
+*.error
+.DS_Store
