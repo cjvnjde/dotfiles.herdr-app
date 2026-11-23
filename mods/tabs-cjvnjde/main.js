@@ -2,6 +2,11 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex, ScrollHandle } from "gpui-base";
 import { spaces, panes, run, exec, checking, openOverlay, theme, window, shared, setShared, layout, settings } from "herdr";
 
+// The Run list popup (mods/run-commands): its width, and its gap below the Run button
+// (the 26 px button sits in the 42 px bar: 10 puts the popup just under the bar's border).
+const RUN_W = 260;
+const RUN_GAP = 10;
+
 function find(node, id) {
   if (node?.id === id) return node;
   for (const child of node?.children ?? []) {
@@ -182,14 +187,22 @@ export default class Tabs extends View {
     const lastI = project ? (shared("run-commands.last") ?? {})[project] : null;
     const last = Number.isInteger(lastI) ? runList[lastI] : null;
     // Rows of 28 in 4 px padding, plus a divider when there are any, plus "Add command…".
-    const openRun = () => openOverlay({ mod: "run-commands", kind: "popup", width: 260,
-      height: 8 + 28 + (runList.length ? Math.min(12, runList.length) * 28 + 9 : 0) });
+    // It drops down under the split button, right edges lined up; at the pointer (Herdr's
+    // default) it covered the button. runAt comes from the button's last press.
+    const openRun = () => openOverlay({ mod: "run-commands", kind: "popup", width: RUN_W,
+      height: 8 + 28 + (runList.length ? Math.min(12, runList.length) * 28 + 9 : 0),
+      ...(this.runAt ? { at: this.runAt } : {}) });
     const runLast = () => run("tab.new", {
       name: last.name || last.cmd.split("\n")[0].trim(), space: space.id, argv: ["zsh", "-ic", last.cmd], // as run-commands' shellArgv
     });
     const runPart = (id) => h_flex().id(id).h_full().gap(5).items_center().text_color(t.muted)
-      .hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop);
+      .hover(s => s.bg(t.hover).text_color(t.foreground));
     const runButton = h_flex().h(26).flex_none().items_center().rounded(6).overflow_hidden().text_size(12).bg(t.chrome)
+      .on_mouse_down("left", (e, cx) => {
+        cx.stop_propagation();
+        const b = e.bounds;
+        if (b) this.runAt = { x: Math.max(0, b.x + b.width - RUN_W), y: b.y + b.height + RUN_GAP };
+      })
       .child(runPart("run-last").px(8).max_w(180).min_w(0)
         .tooltip(last ? `Run ${last.name || last.cmd}` : "Run a command")
         .on_click(() => (last ? runLast() : openRun()))

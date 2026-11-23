@@ -65,12 +65,10 @@ too. They're in `.gitignore`.
 | `layouts/cjvnjde.json` | `main` | the layout: sidebar (machine tabs, spaces, agents), tab bar, panes, Files/Changes panel. Uses the mods below in place of the shipped ones |
 | `mods/machine-tabs` | new | the sidebar strip **All · Local · <machine>**; sets shared `sidebar.machine` (unset = All, `"local"`, or a machine name) |
 | `mods/spaces-cjvnjde` | `spaces` | the spaces list, filtered by `sidebar.machine` |
-| `mods/agents-handoff` | `agents` | the agents list: split by machine under All, filtered on a machine tab; hovering a Claude row shows a handoff button |
-| `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; **▶ <last command>** reruns the project's last used Run command, its chevron opens `run-commands` |
+| `mods/agents-cjvnjde` | `agents` | the agents list: split by machine under All, filtered on a machine tab |
+| `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; **▶ <last command>** reruns the project's last used Run command, its chevron opens `run-commands` under the button (right edges lined up) |
 | `mods/new-menu-cjvnjde` | `new-menu` | the **+** menu: installed agents only; `HIDDEN` at the top lists keys never shown (`goose` is pressly/goose here, not the agent) |
 | `mods/run-commands` | new | Run dropdown and Add dialog (`props.add`): saved commands per **project** in shared `run-commands` (key: `[machine, git common dir]`, so all worktrees of a repo share them; else `[machine, folder]`), mapped from space ids in `run-commands.project`; each started in a new tab via `zsh -ic` (the dotfiles' `.zshrc` skips its deferred init when `ZSH_EXECUTION_STRING` is set, so mise is on PATH); the last one started is `run-commands.last` (an index), preselected in the dropdown (↑/↓, ↩, 1-9). `tabs-cjvnjde` has a copy of `resolveProject`: keep both in step |
-| `mods/menu-handoff` | `menu` | the terminal right-click menu (the layout's `terminal_menu`), plus "New session from summary…" and "Fork session" for Claude Code |
-| `mods/handoff` | new | the handoff dialog: `claude -p --resume <id> --fork-session` writes a summary; Start opens a new tab with it |
 | `settings.json` | | zoom, sounds, fonts and theme for every layout (the settings screen writes this file too) |
 
 Shared state these mods use (in `~/.config/herdr-app/shared.json`, **not** in this repo):
@@ -78,25 +76,22 @@ Shared state these mods use (in `~/.config/herdr-app/shared.json`, **not** in th
 `sidebar.width`, `sidebar.collapsed`, `workspace.panels`. Saved Run commands therefore don't travel
 between machines, and neither do panel sizes (`layouts/.state/`).
 
-The handoff mods also need two files from outside this repo:
-`~/.claude/hooks/herdr-app-session-label.sh` (a Claude Code SessionStart hook that labels the
-terminal with `claude.session`) and, optionally, `~/.claude/env/herdr-app.json` (`--settings` for
-the new sessions). Without the hook, the session id falls back to `~/.claude/sessions/<pid>.json`.
-
 ## Changing things (workflow for agents)
 
 1. **Edit the files here**, in `~/dotfiles/herdr-app`, not through `~/.config/herdr-app`. The two
    paths are the same files, but working here keeps git and the right paths in view.
 2. **Check every mod you touch**: `herdr-app check ~/.config/herdr-app/mods/<name>`. It loads the
    mod once with no props, so it never runs a dialog's other states (`run-commands` with
-   `{add: true}`, `handoff` once it has a summary). Read those code paths with extra care.
+   `{add: true}`). Read those code paths with extra care.
 3. **Reload**: `bash ~/dotfiles/herdr-app/setup.sh reload <name>`.
 4. **Look**: `herdr-app status` lists errors. An invalid file leaves a `<name>.error` next to it
    (`layout.error`, `settings.error`, …) and the app keeps the last good version.
    `herdr-app shot /path/out.png` saves the window as a PNG; crop it with
    `sips -c <h> <w> --cropOffset <y> <x> in.png --out out.png` (Retina: 2 px per point).
 5. Popup and dialog sizes are set **by the caller** (`openOverlay({ width, height })`), not by the mod
-   itself. The handoff dialog is opened from both `menu-handoff` and `agents-handoff`, so change both.
+   itself. So is a popup's place: it opens at the pointer (pushed back inside the window) unless
+   given `at: { x, y }`, its top left in window points. To hang one under a button, take the
+   button's `e.bounds` in its `on_mouse_down` (see the Run button in `tabs-cjvnjde`).
 
 ### Changing a shipped mod or layout
 
@@ -132,7 +127,7 @@ only opened as a popup or dialog, or shown by a layout block). Then run `setup.s
   Give scrolling lists in popups a `max_h(...)` instead (this hid the Run list).
 - A `TextareaState`'s `change` event can't be relied on to redraw: don't enable or disable buttons
   from it. Check the value when the button is pressed.
-- `exec()` doesn't get mise's PATH. Run through `zsh -lic` (see `findClaude` in `mods/handoff`).
+- `exec()` doesn't get mise's PATH. Run through `zsh -ic` (see `shellArgv` in `mods/run-commands`).
 - Use `theme()` colors only, so light and dark themes both work.
 
 ## Escape hatch

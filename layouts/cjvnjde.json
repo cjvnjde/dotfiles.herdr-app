@@ -50,7 +50,7 @@
               "id": "agents",
               "type": "block",
               "content": {
-                "mod": "agents-handoff"
+                "mod": "agents-cjvnjde"
               },
               "size": {
                 "weight": 1
@@ -193,6 +193,5 @@
   "traffic_lights": [
     12,
     16
-  ],
-  "terminal_menu": "menu-handoff"
+  ]
 }

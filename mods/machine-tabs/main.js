@@ -1,6 +1,6 @@
 // Machine tabs: All, this computer, and each machine. Picking one sets shared
 // "sidebar.machine" (unset: All, "local", or a machine's name); spaces-cjvnjde and
-// agents-handoff then show only that machine's spaces and agents.
+// agents-cjvnjde then show only that machine's spaces and agents.
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
