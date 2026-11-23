@@ -66,15 +66,15 @@ too. They're in `.gitignore`.
 | `mods/machine-tabs` | new | the sidebar strip **All · Local · <machine>**; sets shared `sidebar.machine` (unset = All, `"local"`, or a machine name) |
 | `mods/spaces-cjvnjde` | `spaces` | the spaces list, filtered by `sidebar.machine` |
 | `mods/agents-handoff` | `agents` | the agents list: split by machine under All, filtered on a machine tab; hovering a Claude row shows a handoff button |
-| `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; the **▶ Run** button opens `run-commands` |
+| `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; **▶ <last command>** reruns the project's last used Run command, its chevron opens `run-commands` |
 | `mods/new-menu-cjvnjde` | `new-menu` | the **+** menu: installed agents only; `HIDDEN` at the top lists keys never shown (`goose` is pressly/goose here, not the agent) |
-| `mods/run-commands` | new | Run dropdown and Add dialog (`props.add`): saved commands per space in shared `run-commands`, each started in a new tab via `zsh -ic` |
+| `mods/run-commands` | new | Run dropdown and Add dialog (`props.add`): saved commands per **project** in shared `run-commands` (key: `[machine, git common dir]`, so all worktrees of a repo share them; else `[machine, folder]`), mapped from space ids in `run-commands.project`; each started in a new tab via `zsh -ic`; the last one started is `run-commands.last` (an index), preselected in the dropdown (↑/↓, ↩, 1-9). `tabs-cjvnjde` has a copy of `resolveProject`: keep both in step |
 | `mods/menu-handoff` | `menu` | the terminal right-click menu (the layout's `terminal_menu`), plus "New session from summary…" and "Fork session" for Claude Code |
 | `mods/handoff` | new | the handoff dialog: `claude -p --resume <id> --fork-session` writes a summary; Start opens a new tab with it |
 | `settings.json` | | zoom, sounds, fonts and theme for every layout (the settings screen writes this file too) |
 
 Shared state these mods use (in `~/.config/herdr-app/shared.json`, **not** in this repo):
-`sidebar.machine`, `run-commands`, `agents.sort`, `new-menu.agents`, `space.colors`,
+`sidebar.machine`, `run-commands`, `run-commands.last`, `run-commands.project`, `agents.sort`, `new-menu.agents`, `space.colors`,
 `sidebar.width`, `sidebar.collapsed`, `workspace.panels`. Saved Run commands therefore don't travel
 between machines, and neither do panel sizes (`layouts/.state/`).
 
@@ -128,6 +128,8 @@ only opened as a popup or dialog, or shown by a layout block). Then run `setup.s
 - No `setTimeout`, DOM or HTML: use `cx.timer`, `cx.spawn`, `.frames()`, `.loop()` and `.spin()` for animation.
 - Never keep a `cx` for later; every callback gets its own.
 - `InputState` / `TextareaState` belong in `init`, never in `render`.
+- A popup sizes itself to its content, so a `flex_1()` child gets zero height and disappears.
+  Give scrolling lists in popups a `max_h(...)` instead (this hid the Run list).
 - A `TextareaState`'s `change` event can't be relied on to redraw: don't enable or disable buttons
   from it. Check the value when the button is pressed.
 - `exec()` doesn't get mise's PATH. Run through `zsh -lic` (see `findClaude` in `mods/handoff`).

@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, ScrollHandle } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings } from "herdr";
+import { spaces, panes, run, exec, checking, openOverlay, theme, window, shared, setShared, layout, settings } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -25,6 +25,37 @@ function label(tab, lead) {
   const path = /^[~/]|^[A-Za-z]:\\/.test((lead.title ?? "").replace(/^[^\p{L}\p{N}~/]+/u, ""));
   const telling = live && live !== lead.terminal && live !== prog && !path && !live.includes("@") && live.toLowerCase() !== lead.program.key;
   return (tab.name === prog || !tab.named) && telling ? live : base;
+}
+
+// Copy of run-commands' resolveProject: a space's project is its git repo's common
+// .git dir (worktrees share it), else its folder, on its machine.
+const resolving = new Set();
+async function resolveProject(space) {
+  if (resolving.has(space.id) || checking()) return;
+  resolving.add(space.id);
+  const on = space.machine ?? null;
+  let key = JSON.stringify([on, space.folder || "~"]);
+  try {
+    const r = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { ...(space.folder ? { cwd: space.folder } : {}), on });
+    if (r.code === 0) key = JSON.stringify([on, r.stdout.replace(/\n$/, "")]);
+  } catch {}
+  const map = shared("run-commands.project") ?? {};
+  if (map[space.id] !== key) setShared("run-commands.project", { ...map, [space.id]: key });
+  const all = shared("run-commands") ?? {};
+  if (Array.isArray(all[space.id])) {
+    const merged = [...(all[key] ?? [])];
+    for (const c of all[space.id]) if (!merged.some((m) => m.name === c.name && m.cmd === c.cmd)) merged.push(c);
+    const next = { ...all, [key]: merged };
+    delete next[space.id];
+    setShared("run-commands", next);
+  }
+  const lasts = shared("run-commands.last") ?? {};
+  if (space.id in lasts) {
+    const next = { ...lasts };
+    if (Number.isInteger(next[space.id]) && !Number.isInteger(next[key])) next[key] = next[space.id];
+    delete next[space.id];
+    setShared("run-commands.last", next);
+  }
 }
 
 export default class Tabs extends View {
@@ -141,14 +172,31 @@ export default class Tabs extends View {
           else { run("layout.select", { stack: "panel-body", child: id }); run("layout.show", { id: "panel" }); }
         }).child(svg(icon).size(14)).child(label);
     };
-    // Run commands (mods/run-commands): saved commands for this space, each started in a new tab.
-    const runCount = space ? ((shared("run-commands") ?? {})[space.id] ?? []).length : 0;
-    const runButton = h_flex().id("run-commands").h(26).px(8).gap(5).flex_none().items_center().rounded(6)
-      .text_size(12).bg(t.chrome).text_color(t.muted)
-      .hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop)
-      .on_click(() => openOverlay({ mod: "run-commands", kind: "popup", width: 300, height: Math.min(460, 96 + Math.max(1, runCount) * 40) }))
-      .child(svg("mods/run-commands/play.svg").size(12).text_color(t.working)).child("Run")
-      .child(svg("mods/workspace-chrome/chevron-down.svg").size(12));
+    // Run commands (mods/run-commands): saved commands for this space's project (its git
+    // repo, so worktrees share them), each started in a new tab. A split button: the left
+    // part runs the last used command (or opens the list when there's none yet), the
+    // chevron opens the list with that command selected.
+    if (space && !(shared("run-commands.project") ?? {})[space.id]) resolveProject(space);
+    const project = space ? (shared("run-commands.project") ?? {})[space.id] : null;
+    const runList = project ? ((shared("run-commands") ?? {})[project] ?? []) : [];
+    const lastI = project ? (shared("run-commands.last") ?? {})[project] : null;
+    const last = Number.isInteger(lastI) ? runList[lastI] : null;
+    // Rows of 28 in 4 px padding, plus a divider when there are any, plus "Add command…".
+    const openRun = () => openOverlay({ mod: "run-commands", kind: "popup", width: 260,
+      height: 8 + 28 + (runList.length ? Math.min(12, runList.length) * 28 + 9 : 0) });
+    const runLast = () => run("tab.new", {
+      name: last.name || last.cmd.split("\n")[0].trim(), space: space.id, argv: ["zsh", "-ic", last.cmd],
+    });
+    const runPart = (id) => h_flex().id(id).h_full().gap(5).items_center().text_color(t.muted)
+      .hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop);
+    const runButton = h_flex().h(26).flex_none().items_center().rounded(6).overflow_hidden().text_size(12).bg(t.chrome)
+      .child(runPart("run-last").px(8).max_w(180).min_w(0)
+        .tooltip(last ? `Run ${last.name || last.cmd}` : "Run a command")
+        .on_click(() => (last ? runLast() : openRun()))
+        .child(svg("mods/run-commands/play.svg").size(12).flex_none().text_color(t.working))
+        .child(div().min_w(0).truncate().child(last ? (last.name || last.cmd.split("\n")[0].trim()) : "Run")))
+      .child(runPart("run-menu").px(4).tooltip("Run commands").on_click(openRun)
+        .child(svg("mods/workspace-chrome/chevron-down.svg").size(12)));
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
       .on_scroll_wheel(e => this.wheel(e))
