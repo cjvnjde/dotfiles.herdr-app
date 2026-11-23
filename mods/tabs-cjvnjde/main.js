@@ -185,7 +185,7 @@ export default class Tabs extends View {
     const openRun = () => openOverlay({ mod: "run-commands", kind: "popup", width: 260,
       height: 8 + 28 + (runList.length ? Math.min(12, runList.length) * 28 + 9 : 0) });
     const runLast = () => run("tab.new", {
-      name: last.name || last.cmd.split("\n")[0].trim(), space: space.id, argv: ["zsh", "-ic", last.cmd],
+      name: last.name || last.cmd.split("\n")[0].trim(), space: space.id, argv: ["zsh", "-ic", last.cmd], // as run-commands' shellArgv
     });
     const runPart = (id) => h_flex().id(id).h_full().gap(5).items_center().text_color(t.muted)
       .hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop);

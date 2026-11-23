@@ -68,10 +68,14 @@ const firstLine = (cmd) => {
   return (lines[0] ?? "") + (lines.length > 1 ? " …" : "");
 };
 
+// An interactive zsh, so aliases and PATH match a terminal (the dotfiles' .zshrc
+// loads mise & co. up front for a -c command). tabs-cjvnjde has a copy.
+const shellArgv = (cmd) => ["zsh", "-ic", cmd];
+
 function start(space, c, i) {
   const project = projectOf(space);
   if (project && Number.isInteger(i)) setLast(project, i);
-  run("tab.new", { name: c.name || firstLine(c.cmd), space: space.id, argv: ["zsh", "-ic", c.cmd] });
+  run("tab.new", { name: c.name || firstLine(c.cmd), space: space.id, argv: shellArgv(c.cmd) });
 }
 
 export default class RunCommands extends View {
