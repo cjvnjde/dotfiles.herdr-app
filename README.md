@@ -63,8 +63,8 @@ too. They're in `.gitignore`.
 | Item | Based on | What it does |
 |---|---|---|
 | `layouts/cjvnjde.json` | `main` | the layout: sidebar (machine tabs, spaces, agents), tab bar, panes, Files/Changes panel. Uses the mods below in place of the shipped ones |
-| `mods/machine-tabs` | new | the sidebar strip **All · Local · <machine>**; sets shared `sidebar.machine` (unset = All, `"local"`, or a machine name) |
-| `mods/spaces-cjvnjde` | `spaces` | the spaces list, filtered by `sidebar.machine` |
+| `mods/machine-tabs` | new | the sidebar strip **All · Local · <machine>**; sets shared `sidebar.machine` (unset = All, `"local"`, or a machine name). Only shown once another machine is added (see `spaces-cjvnjde`) |
+| `mods/spaces-cjvnjde` | `spaces` | the spaces list, filtered by `sidebar.machine`; also hides the `machine-tabs` layout block (`layout.hide`) while this computer is the only machine, and shows it again when one is added |
 | `mods/agents-cjvnjde` | `agents` | the agents list: split by machine under All, filtered on a machine tab |
 | `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; **▶ <last command>** reruns the project's last used Run command, its chevron opens `run-commands` under the button (right edges lined up) |
 | `mods/new-menu-cjvnjde` | `new-menu` | the **+** menu: installed agents only; `HIDDEN` at the top lists keys never shown (`goose` is pressly/goose here, not the agent) |

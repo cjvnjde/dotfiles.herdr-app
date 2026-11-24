@@ -97,9 +97,27 @@ export default class Spaces extends View {
     const now = Date.now();
     const sp = spaces();
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
+    this.syncMachineTabs(now, sp);
     const due = this.due(now, sp, panes());
     if (due.size) this.refreshGit(due, cx);
     if (sp.some((s) => !this.shown.has(s.id)) || this.orderingDue(now)) cx.notify();
+  }
+
+  // The machine tabs (mods/machine-tabs) only matter once there's another machine:
+  // their layout block is hidden while this computer is the only one, and shown again
+  // when one is added (or has spaces). Done from here, not machine-tabs itself, since a
+  // hidden block may not be drawn to bring itself back. Going back to one machine also
+  // clears the pick, so the lists aren't left filtered by a strip that's gone.
+  syncMachineTabs(now, sp) {
+    const node = find(layout(), "machine-tabs");
+    if (!node) return;
+    const remote = machines().some((m) => m.name) || sp.some((s) => s.machine) || this.machines.length > 0;
+    if (!remote && shared("sidebar.machine") != null) setShared("sidebar.machine", null);
+    if (Boolean(node.hidden) === !remote) return;
+    // Asked already: give the layout a moment to say so before asking again.
+    if (this.machineTabs?.remote === remote && now - this.machineTabs.at < 2000) return;
+    this.machineTabs = { remote, at: now };
+    run(remote ? "layout.show" : "layout.hide", { id: "machine-tabs" });
   }
 
   // Places whose git could have changed: new ones (a new space, a cd), where a

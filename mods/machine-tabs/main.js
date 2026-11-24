@@ -1,6 +1,7 @@
 // Machine tabs: All, this computer, and each machine. Picking one sets shared
 // "sidebar.machine" (unset: All, "local", or a machine's name); spaces-cjvnjde and
 // agents-cjvnjde then show only that machine's spaces and agents.
+// With no other machine the block is hidden: spaces-cjvnjde (syncMachineTabs) does that.
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
