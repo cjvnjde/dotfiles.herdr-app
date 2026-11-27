@@ -227,13 +227,18 @@ export default class Agents extends View {
     // it, it gets no row of its own, unless it's pinned.
     const nested = new Set(collapsed ? [] : list.flatMap((a) => this.tree(all, a.address).map((s) => s.t.address)));
     list = list.filter((a) => a.pinned || !nested.has(a.address));
-    // Machine view (mods/machine-tabs): a machine's tab shows only its agents; All splits them by machine.
+    // Machine select (mods/machine-select): only the machines in shared "sidebar.machines"
+    // (unset: every one; "local": this computer). More than one shown: split by machine.
     const spaceMachine = new Map(spaces().map((s) => [s.id, s.machine ?? null]));
     const machineOf = (a) => spaceMachine.get(a.space) ?? (a.address.includes("/") ? a.address.split("/")[0] : null);
-    const pick = shared("sidebar.machine");
-    if (pick != null) list = list.filter((a) => machineOf(a) === (pick === "local" ? null : pick));
+    const pick = shared("sidebar.machines");
+    const known = new Set(["local", ...machines().map((m) => m.name).filter(Boolean), ...spaces().map((s) => s.machine).filter(Boolean)]);
+    const chosen = Array.isArray(pick) ? pick.filter((k) => known.has(k)) : [];
+    const only = chosen.length ? new Set(chosen) : null;
+    if (only) list = list.filter((a) => only.has(machineOf(a) ?? "local"));
     const machineKeys = [...new Set(list.map(machineOf))].sort((x, y) => (x === null ? -1 : y === null ? 1 : x.localeCompare(y)));
-    const split = pick == null && (machines().some((m) => m.name) || machineKeys.some((m) => m !== null));
+    const many = !only || only.size > 1;
+    const split = many && (machines().some((m) => m.name) || machineKeys.some((m) => m !== null));
     const tabCounts = new Map();
     for (const a of list) tabCounts.set(a.tab, (tabCounts.get(a.tab) ?? 0) + 1);
     const byPriority = sort.id === "priority";
@@ -366,7 +371,7 @@ export default class Agents extends View {
         .child(h_flex().flex_1().min_w(0).gap(5).items_center()
           .child(div().min_w(0).max_w(full && more ? 120 : 200).truncate().text_color(idle ? t.muted : t.foreground).child(name))
           .when(full && Boolean(more), el => el.child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(`\u00b7 ${more}`))))
-        .when(Boolean(machine) && pick == null && !split, el => el.child(div().text_size(10).text_color(t.dim).child(machine)))
+        .when(Boolean(machine) && many && !split, el => el.child(div().text_size(10).text_color(t.dim).child(machine)))
         .when(subs.length > 0, el => el.child(fold(a, subs)))
         .when(this.hovered === a.address, el => el.child(pin))
         .when(this.hovered !== a.address && Boolean(when), el => el.child(div().flex_none().text_size(11).text_color(t.dim).child(duration(now - when))))

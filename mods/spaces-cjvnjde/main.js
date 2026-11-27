@@ -97,27 +97,27 @@ export default class Spaces extends View {
     const now = Date.now();
     const sp = spaces();
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
-    this.syncMachineTabs(now, sp);
+    this.syncMachineSelect(now, sp);
     const due = this.due(now, sp, panes());
     if (due.size) this.refreshGit(due, cx);
     if (sp.some((s) => !this.shown.has(s.id)) || this.orderingDue(now)) cx.notify();
   }
 
-  // The machine tabs (mods/machine-tabs) only matter once there's another machine:
-  // their layout block is hidden while this computer is the only one, and shown again
-  // when one is added (or has spaces). Done from here, not machine-tabs itself, since a
+  // The machine select (mods/machine-select) only matters once there's another machine:
+  // its layout block is hidden while this computer is the only one, and shown again
+  // when one is added (or has spaces). Done from here, not machine-select itself, since a
   // hidden block may not be drawn to bring itself back. Going back to one machine also
-  // clears the pick, so the lists aren't left filtered by a strip that's gone.
-  syncMachineTabs(now, sp) {
-    const node = find(layout(), "machine-tabs");
+  // clears the choice, so the lists aren't left filtered by a button that's gone.
+  syncMachineSelect(now, sp) {
+    const node = find(layout(), "machine-select");
     if (!node) return;
     const remote = machines().some((m) => m.name) || sp.some((s) => s.machine) || this.machines.length > 0;
-    if (!remote && shared("sidebar.machine") != null) setShared("sidebar.machine", null);
+    if (!remote && shared("sidebar.machines") != null) setShared("sidebar.machines", null);
     if (Boolean(node.hidden) === !remote) return;
     // Asked already: give the layout a moment to say so before asking again.
-    if (this.machineTabs?.remote === remote && now - this.machineTabs.at < 2000) return;
-    this.machineTabs = { remote, at: now };
-    run(remote ? "layout.show" : "layout.hide", { id: "machine-tabs" });
+    if (this.machineSelect?.remote === remote && now - this.machineSelect.at < 2000) return;
+    this.machineSelect = { remote, at: now };
+    run(remote ? "layout.show" : "layout.hide", { id: "machine-select" });
   }
 
   // Places whose git could have changed: new ones (a new space, a cd), where a
@@ -373,9 +373,12 @@ export default class Spaces extends View {
       this.activeAt = rows.findIndex(r => r.w.active);
       return rows.map(draw);
     }
-    // Machine view (mods/machine-tabs): shared "sidebar.machine" is unset (All), "local" or a machine's name.
-    const pick = shared("sidebar.machine");
-    const machineNames = [null, ...remote].filter((m) => pick == null || (pick === "local" ? m === null : m === pick));
+    // Machine select (mods/machine-select): shared "sidebar.machines" is unset (every machine)
+    // or the ones shown ("local": this computer). None of those left: every machine.
+    const pick = shared("sidebar.machines");
+    const every = [null, ...remote];
+    const chosen = Array.isArray(pick) ? every.filter((m) => pick.includes(m ?? "local")) : [];
+    const machineNames = chosen.length ? chosen : every;
     return machineNames.flatMap((m) => {
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
       const repair = this.reconnecting[m];

@@ -62,17 +62,17 @@ too. They're in `.gitignore`.
 
 | Item | Based on | What it does |
 |---|---|---|
-| `layouts/cjvnjde.json` | `main` | the layout: sidebar (machine tabs, spaces, agents), tab bar, panes, Files/Changes panel. Uses the mods below in place of the shipped ones |
-| `mods/machine-tabs` | new | the sidebar strip **All · Local · <machine>**; sets shared `sidebar.machine` (unset = All, `"local"`, or a machine name). Only shown once another machine is added (see `spaces-cjvnjde`) |
-| `mods/spaces-cjvnjde` | `spaces` | the spaces list, filtered by `sidebar.machine`; also hides the `machine-tabs` layout block (`layout.hide`) while this computer is the only machine, and shows it again when one is added |
-| `mods/agents-cjvnjde` | `agents` | the agents list: split by machine under All, filtered on a machine tab |
-| `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; **▶ <last command>** reruns the project's last used Run command, its chevron opens `run-commands` under the button (right edges lined up) |
+| `layouts/cjvnjde.json` | `main` | the layout: sidebar (machine select, spaces, agents), tab bar, panes, Files/Changes panel. Uses the mods below in place of the shipped ones |
+| `mods/machine-select` | new | the sidebar's machine button: a select: a popup list (**All machines**, This computer, each machine), one shown at a time; picking a row closes it. Sets shared `sidebar.machines` (unset = every machine, else a one-item list: `"local"` or a machine's name). Only shown once another machine is added (see `spaces-cjvnjde`) |
+| `mods/spaces-cjvnjde` | `spaces` | the spaces list, filtered by `sidebar.machines`; also hides the `machine-select` layout block (`layout.hide`) while this computer is the only machine, and shows it again when one is added |
+| `mods/agents-cjvnjde` | `agents` | the agents list, filtered by `sidebar.machines`; split by machine when more than one is shown |
+| `mods/tabs-cjvnjde` | `tabs` | the tab bar; **+** opens `new-menu-cjvnjde`; **▶ <last command>** reruns the project's last used Run command, its chevron opens `run-commands` under the button (right edges lined up). While one runs in the space it shows **● <name>** (click: its tab) and **■** (stop); it also does every stop (`run-commands.stopping`), since it's always shown: Ctrl-C, up to 5 s, then `terminal.kill` |
 | `mods/new-menu-cjvnjde` | `new-menu` | the **+** menu: installed agents only; `HIDDEN` at the top lists keys never shown (`goose` is pressly/goose here, not the agent) |
-| `mods/run-commands` | new | Run dropdown and Add dialog (`props.add`): saved commands per **project** in shared `run-commands` (key: `[machine, git common dir]`, so all worktrees of a repo share them; else `[machine, folder]`), mapped from space ids in `run-commands.project`; each started in a new tab via `zsh -ic` (the dotfiles' `.zshrc` skips its deferred init when `ZSH_EXECUTION_STRING` is set, so mise is on PATH); the last one started is `run-commands.last` (an index), preselected in the dropdown (↑/↓, ↩, 1-9). `tabs-cjvnjde` has a copy of `resolveProject`: keep both in step |
+| `mods/run-commands` | new | Run dropdown and Add dialog (`props.add`): saved commands per **project** in shared `run-commands` (key: `[machine, git common dir]`, so all worktrees of a repo share them; else `[machine, folder]`), mapped from space ids in `run-commands.project`; each started in a new tab via `zsh -ic` (the dotfiles' `.zshrc` skips its deferred init when `ZSH_EXECUTION_STRING` is set, so mise is on PATH); the last one started is `run-commands.last` (an index), preselected in the dropdown (↑/↓, ↩, 1-9). A command's tab is found from its terminal (`herdr.space` label + argv ending in `zsh -ic <cmd>`); running = something other than that terminal's own shell in front. Running rows show ● and ■, picking one shows its tab; running one whose command ended replaces its old tab. `tabs-cjvnjde` has copies of `resolveProject` and the runs block: keep both in step |
 | `settings.json` | | zoom, sounds, fonts and theme for every layout (the settings screen writes this file too) |
 
 Shared state these mods use (in `~/.config/herdr-app/shared.json`, **not** in this repo):
-`sidebar.machine`, `run-commands`, `run-commands.last`, `run-commands.project`, `agents.sort`, `new-menu.agents`, `space.colors`,
+`sidebar.machines`, `run-commands`, `run-commands.last`, `run-commands.project`, `run-commands.started`, `run-commands.stopping`, `agents.sort`, `new-menu.agents`, `space.colors`,
 `sidebar.width`, `sidebar.collapsed`, `workspace.panels`. Saved Run commands therefore don't travel
 between machines, and neither do panel sizes (`layouts/.state/`).
 

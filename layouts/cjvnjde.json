@@ -22,10 +22,10 @@
           "window_drag": true
         },
         {
-          "id": "machine-tabs",
+          "id": "machine-select",
           "type": "block",
           "content": {
-            "mod": "machine-tabs"
+            "mod": "machine-select"
           },
           "size": {
             "px": 38

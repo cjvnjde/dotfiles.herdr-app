@@ -3,6 +3,11 @@
 // interactive zsh (aliases, mise, PATH as in your terminal); the shell stays open
 // after the command ends.
 //
+// A command's tab is found again from its terminal (see runsOf), so the list and the
+// top bar show which ones are running. Picking a running one shows its tab; its ■
+// stops it (Ctrl-C, then the terminal is killed, which closes its pane). Running one
+// again whose command has ended replaces its old tab instead of adding another.
+//
 // A project is the space's git repo (its common .git dir, so every worktree of a
 // repo shares one list), else its folder, on its machine. resolveProject() maps
 // space ids to project keys in shared("run-commands.project").
@@ -15,12 +20,14 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input, TextareaState, Textarea } from "gpui-base";
-import { theme, spaces, run, exec, checking, openOverlay, closeOverlay, props, shared, setShared, settings } from "herdr";
+import { theme, spaces, panes, terminals, run, exec, checking, openOverlay, closeOverlay, props, shared, setShared, settings } from "herdr";
 
 const KEY = "run-commands";
 const LAST = "run-commands.last";
 const PROJ = "run-commands.project";
 const PLAY = "mods/run-commands/play.svg";
+const STOP = "mods/run-commands/stop.svg";
+const SPINNER = "mods/workspace-chrome/spinner.svg";
 const ROW = 28;
 
 const projectOf = (space) => (shared(PROJ) ?? {})[space.id] ?? null;
@@ -72,10 +79,81 @@ const firstLine = (cmd) => {
 // loads mise & co. up front for a -c command). tabs-cjvnjde has a copy.
 const shellArgv = (cmd) => ["zsh", "-ic", cmd];
 
+// ---- Runs: a saved command's terminals in a space. tabs-cjvnjde has a copy of this
+// block (down to showRun): keep both in step.
+// Herdr labels the terminals it starts with herdr.space (the space's id on its own
+// machine, no "machine/" prefix) and wraps ours as
+//   <shell> -lic '"$@"; exec "$0" -li' <shell> zsh -ic <cmd>
+// so a run's argv ends with shellArgv(cmd). When the command ends on its own (it
+// finished, failed, crashed) a login shell takes over that same process and the tab
+// stays with its output; Ctrl-C ends the whole terminal, and its tab closes.
+const STOPS = "run-commands.stopping"; // { [runKey]: when asked }: tabs-cjvnjde does them
+const STARTS = "run-commands.started"; // { [runKey]: when }: running until its terminal shows
+const STOP_WAIT = 5000; // after Ctrl-C, how long it gets before its terminal is killed
+const START_GRACE = 3000; // the shells load their rc files before the command shows
+const runKey = (space, cmd) => JSON.stringify([space.id, cmd]);
+const machineOfAddress = (a) => (a.includes("/") ? a.slice(0, a.indexOf("/")) : null);
+
+function runsOf(space, cmd) {
+  if (!space) return [];
+  const id = space.id.slice(space.id.lastIndexOf("/") + 1);
+  const on = space.machine ?? null;
+  return terminals().filter((t) => {
+    const a = t.argv;
+    return t.state === "live" && t.labels?.["herdr.space"] === id && machineOfAddress(t.address) === on
+      && Array.isArray(a) && a.length >= 3 && a[a.length - 1] === cmd && a[a.length - 2] === "-ic" && a[a.length - 3] === "zsh";
+  });
+}
+
+// Something other than the terminal's own shell is in front: the command (or, after
+// it ended, whatever was typed into that shell). Not reported: counted as running.
+const busy = (t) => !t.foreground?.pid || t.foreground.pid !== t.pid;
+
+// "running", "stopping", "ended" (its tab is still open), or null (no tab).
+function runState(space, cmd) {
+  const k = runKey(space, cmd), now = Date.now();
+  const ts = runsOf(space, cmd);
+  const asked = (shared(STOPS) ?? {})[k];
+  if (ts.length && Number.isFinite(asked) && now - asked < STOP_WAIT + 5000) return "stopping";
+  if (ts.some(busy) || now - ((shared(STARTS) ?? {})[k] ?? 0) < START_GRACE) return "running";
+  return ts.length ? "ended" : null;
+}
+const isLive = (state) => state === "running" || state === "stopping";
+
+// Starts it in a new tab. A tab left from an earlier run (its command ended) goes:
+// that's what kept piling up tabs.
+function startRun(space, c) {
+  for (const t of runsOf(space, c.cmd)) run("terminal.kill", { terminal: t.address });
+  const now = Date.now();
+  const starts = Object.fromEntries(Object.entries(shared(STARTS) ?? {}).filter(([, at]) => now - at < START_GRACE));
+  setShared(STARTS, { ...starts, [runKey(space, c.cmd)]: now });
+  run("tab.new", { name: c.name || firstLine(c.cmd), space: space.id, argv: shellArgv(c.cmd) });
+}
+
+// tabs-cjvnjde stops it (it's always shown; a popup's work ends when it closes).
+function askStop(space, cmd) {
+  setShared(STOPS, { ...(shared(STOPS) ?? {}), [runKey(space, cmd)]: Date.now() });
+}
+
+function showRun(space, cmd) {
+  const t = runsOf(space, cmd)[0];
+  if (!t) return;
+  const on = machineOfAddress(t.address), label = t.labels?.["herdr.tab"];
+  const tab = panes().find((p) => p.terminal === t.address)?.tab ?? (label ? (on ? `${on}/${label}` : label) : null);
+  if (tab) run("tab.select", { id: tab });
+}
+// ---- end of the copied block
+
 function start(space, c, i) {
   const project = projectOf(space);
   if (project && Number.isInteger(i)) setLast(project, i);
-  run("tab.new", { name: c.name || firstLine(c.cmd), space: space.id, argv: shellArgv(c.cmd) });
+  startRun(space, c);
+}
+
+// A running one: its tab; else start it.
+function pickRun(space, c, i) {
+  if (isLive(runState(space, c.cmd))) showRun(space, c.cmd);
+  else start(space, c, i);
 }
 
 export default class RunCommands extends View {
@@ -88,6 +166,11 @@ export default class RunCommands extends View {
       if (space) resolveProject(space);
       this.sel = null; // null: the last used one
       this.handle.focus();
+      // A command ending doesn't redraw mods on its own: look twice a second, redraw on a change.
+      cx.timer.every(500, (cx) => {
+        const sig = this.states();
+        if (sig !== this.sig) { this.sig = sig; cx.notify(); }
+      });
       return;
     }
     this.name = InputState.new({ placeholder: "Name" });
@@ -106,6 +189,13 @@ export default class RunCommands extends View {
   }
 
   close() { closeOverlay(props()?.overlay); }
+
+  // The active space's commands' run states, as one string to compare.
+  states() {
+    const space = spaces().find((s) => s.active);
+    const project = space ? projectOf(space) : null;
+    return JSON.stringify(commandsOf(project).map((c) => runState(space, c.cmd)));
+  }
 
   submit() {
     const cmd = this.cmd.value().trim();
@@ -137,7 +227,7 @@ export default class RunCommands extends View {
     }
     const i = e.key === "enter" ? this.selected(project, list) : /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
     const c = list[i];
-    if (c) { this.close(); start(space, c, i); cx.stop_propagation(); }
+    if (c) { this.close(); pickRun(space, c, i); cx.stop_propagation(); }
   }
 
   render() {
@@ -150,14 +240,26 @@ export default class RunCommands extends View {
     const project = space ? projectOf(space) : null;
     const list = commandsOf(project);
     const sel = this.selected(project, list);
+    const states = list.map((c) => runState(space, c.cmd));
+    this.sig = JSON.stringify(states);
 
+    // Running: a green dot, the row shows its tab, ■ stops it. Stopping: a spinner.
+    const icon = (state) => state === "stopping" ? svg(SPINNER).size(11).flex_none().text_color(t.muted).spin(900)
+      : state === "running" ? div().size(11).flex_none().flex().items_center().justify_center().child(div().size(7).rounded(4).bg(t.ansi2))
+      : svg(PLAY).size(11).flex_none().text_color(t.working);
+    const stopButton = (c, i, state) => h_flex().id(`rc-stop-${i}`).size(20).flex_none().items_center().justify_center().rounded(5)
+      .text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.blocked))
+      .tooltip(state === "stopping" ? "Stopping…" : "Stop (closes its tab)")
+      .on_click((_e, cx) => { cx.stop_propagation(); if (state === "running") askStop(space, c.cmd); cx.notify(); })
+      .child(svg(STOP).size(10));
     const row = (c, i) => h_flex().id(`rc-${i}`).h(ROW).pl(8).pr(4).gap(8).rounded(6).items_center().flex_none()
       .when(i === sel, (el) => el.bg(t.selected))
       .on_mouse_move((_e, cx) => { if (this.sel !== i) { this.sel = i; cx.notify(); } })
-      .on_click(() => { this.close(); start(space, c, i); })
-      .tooltip(c.cmd)
-      .child(svg(PLAY).size(11).flex_none().text_color(t.working))
+      .on_click(() => { this.close(); pickRun(space, c, i); })
+      .tooltip(isLive(states[i]) ? `Running: ${c.cmd}\nClick to show its tab` : states[i] === "ended" ? `${c.cmd}\nEnded: runs again in place of its old tab` : c.cmd)
+      .child(icon(states[i]))
       .child(div().flex_1().min_w(0).truncate().child(c.name || firstLine(c.cmd)))
+      .when(isLive(states[i]), (el) => el.child(stopButton(c, i, states[i])))
       .child(h_flex().id(`rc-del-${i}`).size(20).flex_none().items_center().justify_center().rounded(5)
         .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.blocked))
         .when(i !== sel, (el) => el.opacity(0))
